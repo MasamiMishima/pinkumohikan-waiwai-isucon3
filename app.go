@@ -9,6 +9,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
+        "github.com/pkg/profile"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -111,6 +112,7 @@ var (
 )
 
 func main() {
+        defer profile.Start(profile.ProfilePath(".")).Stop()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	env := os.Getenv("ISUCON_ENV")
