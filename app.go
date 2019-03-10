@@ -505,13 +505,13 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-        older := &Memo{}
+	older := &Memo{}
 	if rows.Next() {
 		rows.Scan(&older.Id, &older.Content, &older.IsPrivate, &older.CreatedAt, &older.UpdatedAt)
 		rows.Close()
 	}
 
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id < ? "+cond+" ORDER BY created_at", memo.User, memoId)
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id > ? "+cond+" ORDER BY id DESC LIMIT 1", memo.User, memoId)
 
 	if err != nil {
 		serverError(w, err)
