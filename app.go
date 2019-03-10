@@ -112,7 +112,6 @@ var (
 )
 
 func main() {
-        defer profile.Start(profile.ProfilePath(".")).Stop()
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	env := os.Getenv("ISUCON_ENV")
@@ -485,14 +484,15 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 	user := getUser(w, r, dbConn, session)
 
-	rows, err := dbConn.Query("SELECT id, user, content, is_private, created_at, updated_at FROM memos WHERE id=?", memoId)
+	rows, err := dbConn.Query("SELECT id, user, content, is_private, created_at, updated_at, users.username" +
+		" FROM memos LEFT JOIN users as memos.user=memos.id WHERE id=?", memoId)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 	memo := &Memo{}
 	if rows.Next() {
-		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt)
+		rows.Scan(&memo.Id, &memo.User, &memo.Content, &memo.IsPrivate, &memo.CreatedAt, &memo.UpdatedAt, &memo.Username)
 		rows.Close()
 	} else {
 		notFound(w)
@@ -504,15 +504,6 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rows, err = dbConn.Query("SELECT username FROM users WHERE id=?", memo.User)
-	if err != nil {
-		serverError(w, err)
-		return
-	}
-	if rows.Next() {
-		rows.Scan(&memo.Username)
-		rows.Close()
-	}
 
 	var cond string
 	if user != nil && user.Id == memo.User {
@@ -520,29 +511,28 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 	} else {
 		cond = "AND is_private=0"
 	}
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? "+cond+" ORDER BY created_at", memo.User)
+
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id > ?"+cond+" ORDER BY created_at", memo.User, memoId)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	memos := make(Memos, 0)
-	for rows.Next() {
-		m := Memo{}
-		rows.Scan(&m.Id, &m.Content, &m.IsPrivate, &m.CreatedAt, &m.UpdatedAt)
-		memos = append(memos, &m)
-	}
-	rows.Close()
 	var older *Memo
+	if rows.Next() {
+		rows.Scan(&older.Id, &older.Content, &older.IsPrivate, &older.CreatedAt, &older.UpdatedAt)
+		rows.Close()
+	}
+
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id < ?"+cond+" ORDER BY created_at", memo.User, memoId)
+	if err != nil {
+		serverError(w, err)
+		return
+	}
+
 	var newer *Memo
-	for i, m := range memos {
-		if m.Id == memo.Id {
-			if i > 0 {
-				older = memos[i-1]
-			}
-			if i < len(memos)-1 {
-				newer = memos[i+1]
-			}
-		}
+	if rows.Next() {
+		rows.Scan(&newer.Id, &newer.Content, &newer.IsPrivate, &newer.CreatedAt, &newer.UpdatedAt)
+		rows.Close()
 	}
 
 	v := &View{
