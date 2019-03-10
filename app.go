@@ -9,7 +9,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
-        "github.com/pkg/profile"
+        //"github.com/pkg/profile"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -484,8 +484,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 	user := getUser(w, r, dbConn, session)
 
-	rows, err := dbConn.Query("SELECT id, user, content, is_private, created_at, updated_at, users.username" +
-		" FROM memos LEFT JOIN users as memos.user=memos.id WHERE id=?", memoId)
+	rows, err := dbConn.Query("SELECT memos.id, memos.user, memos.content, memos.is_private, memos.created_at, memos.updated_at, users.username FROM memos LEFT JOIN users on memos.user=users.id WHERE memos.id=? limit 1", memoId)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -512,24 +511,25 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		cond = "AND is_private=0"
 	}
 
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id > ?"+cond+" ORDER BY created_at", memo.User, memoId)
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id < ? " + cond + " ORDER BY id DESC LIMIT 1", memo.User, memoId)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
-	var older *Memo
+
+        older := &Memo{}
 	if rows.Next() {
 		rows.Scan(&older.Id, &older.Content, &older.IsPrivate, &older.CreatedAt, &older.UpdatedAt)
 		rows.Close()
 	}
 
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id < ?"+cond+" ORDER BY created_at", memo.User, memoId)
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id > ? " + cond + " ORDER BY id DESC LIMIT 1", memo.User, memoId)
 	if err != nil {
 		serverError(w, err)
 		return
 	}
 
-	var newer *Memo
+	newer := &Memo{}
 	if rows.Next() {
 		rows.Scan(&newer.Id, &newer.Content, &newer.IsPrivate, &newer.CreatedAt, &newer.UpdatedAt)
 		rows.Close()
