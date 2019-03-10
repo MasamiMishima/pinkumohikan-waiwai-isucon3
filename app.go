@@ -9,14 +9,13 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/securecookie"
-        "github.com/pkg/profile"
+	"gopkg.in/russross/blackfriday.v2"
 	"html/template"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"runtime"
 	"strconv"
 	"strings"
@@ -92,20 +91,8 @@ var (
 			return session.Values["token"]
 		},
 		"gen_markdown": func(s string) template.HTML {
-			f, _ := ioutil.TempFile(tmpDir, "isucon")
-			defer f.Close()
-			f.WriteString(s)
-			f.Sync()
-			finfo, _ := f.Stat()
-			path := tmpDir + finfo.Name()
-			defer os.Remove(path)
-			cmd := exec.Command(markdownCommand, path)
-			out, err := cmd.Output()
-			if err != nil {
-				log.Printf("can't exec markdown command: %v", err)
-				return ""
-			}
-			return template.HTML(out)
+			html := blackfriday.Run([]byte(s))
+			return template.HTML(html)
 		},
 	}
 	tmpl = template.Must(template.New("tmpl").Funcs(fmap).ParseGlob("templates/*.html"))
@@ -512,7 +499,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		cond = "AND is_private=0"
 	}
 
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id > ?"+cond+" ORDER BY created_at", memo.User, memoId)
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id > ? "+cond, memo.User, memoId)
 	if err != nil {
 		serverError(w, err)
 		return
@@ -523,7 +510,7 @@ func memoHandler(w http.ResponseWriter, r *http.Request) {
 		rows.Close()
 	}
 
-	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id < ?"+cond+" ORDER BY created_at", memo.User, memoId)
+	rows, err = dbConn.Query("SELECT id, content, is_private, created_at, updated_at FROM memos WHERE user=? AND id < ? "+cond+" ORDER BY created_at", memo.User, memoId)
 	if err != nil {
 		serverError(w, err)
 		return
